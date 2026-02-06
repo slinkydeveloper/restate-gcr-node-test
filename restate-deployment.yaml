@@ -1,0 +1,23 @@
+apiVersion: restate.dev/v1
+kind: RestateCluster
+metadata:
+  name: restate-test
+spec:
+  cluster:
+    autoProvision: true
+  compute:
+    image: restatedev/restate:1.6
+  storage:
+    storageRequestBytes: 2147483648 # 2 GiB
+  config: |
+    auto-provision = false
+  security:
+    networkEgressRules:
+      - ports:
+          - port: 53
+            protocol: UDP
+          - port: 53
+            protocol: TCP
+        to:
+          - ipBlock:
+              cidr: 169.254.20.10/32
