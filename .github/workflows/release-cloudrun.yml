@@ -60,19 +60,9 @@ jobs:
           env_vars: |
             NODE_ENV=production
 
-      # Construct the tagged URL from the service URL
-      # Service URL: https://service-abc123.run.app -> Tagged: https://tag---service-abc123.run.app
-      - name: Set tagged URL
-        run: |
-          SERVICE_URL="${{ steps.deploy.outputs.url }}"
-          TAGGED_URL="${SERVICE_URL/https:\/\//https://rev-${{ env.SHORT_SHA }}---}"
-          echo "TAGGED_URL=$TAGGED_URL" >> $GITHUB_ENV
-          echo "Service URL: $SERVICE_URL"
-          echo "Tagged URL: $TAGGED_URL"
-
-      # Now register to Restate
+      # Register to Restate (outputs.url already contains the tagged revision URL)
       - name: Register Restate deployment
         env:
           RESTATE_ADMIN_URL: ${{ secrets.RESTATE_ADMIN_URL }}
           #RESTATE_AUTH_TOKEN: ${{ secrets.RESTATE_AUTH_TOKEN }}
-        run: npx -y @restatedev/restate deployment register -y ${{ env.TAGGED_URL }}
+        run: npx -y @restatedev/restate deployment register -y ${{ steps.deploy.outputs.url }}
