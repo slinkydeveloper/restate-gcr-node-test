@@ -56,7 +56,9 @@ jobs:
           region: ${{ env.REGION }}
           image: ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE }}:${{ github.sha }}
           tag: rev-${{ env.SHORT_SHA }}
-          flags: '--allow-unauthenticated'
+          # --use-http2 is required becuase the node application uses H2C.
+          # The --allow-unauthenticated is to simplify the setup here.
+          flags: '--allow-unauthenticated --use-http2'
           env_vars: |
             NODE_ENV=production
 
