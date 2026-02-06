@@ -45,6 +45,9 @@ jobs:
           docker build -t "${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE }}:${{ github.sha }}" ./
           docker push "${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE }}:${{ github.sha }}"
 
+      - name: Set short SHA
+        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
+
       - name: Deploy to Cloud Run
         id: deploy
         uses: google-github-actions/deploy-cloudrun@v3
@@ -52,16 +55,24 @@ jobs:
           service: ${{ env.SERVICE }}
           region: ${{ env.REGION }}
           image: ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE }}:${{ github.sha }}
+          tag: rev-${{ env.SHORT_SHA }}
+          flags: '--allow-unauthenticated'
           env_vars: |
             NODE_ENV=production
 
-      # If required, use the Cloud Run url output in later steps
-      - name: Show deployed url
-        run: echo ${{ steps.deploy.outputs.url }}
+      # Construct the tagged URL from the service URL
+      # Service URL: https://service-abc123.run.app -> Tagged: https://tag---service-abc123.run.app
+      - name: Set tagged URL
+        run: |
+          SERVICE_URL="${{ steps.deploy.outputs.url }}"
+          TAGGED_URL="${SERVICE_URL/https:\/\//https://rev-${{ env.SHORT_SHA }}---}"
+          echo "TAGGED_URL=$TAGGED_URL" >> $GITHUB_ENV
+          echo "Service URL: $SERVICE_URL"
+          echo "Tagged URL: $TAGGED_URL"
 
       # Now register to Restate
       - name: Register Restate deployment
         env:
           RESTATE_ADMIN_URL: ${{ secrets.RESTATE_ADMIN_URL }}
-          RESTATE_AUTH_TOKEN: ${{ secrets.RESTATE_AUTH_TOKEN }}
-        run: npx -y @restatedev/restate deployment register -y ${{ steps.deploy.outputs.url }}
+          #RESTATE_AUTH_TOKEN: ${{ secrets.RESTATE_AUTH_TOKEN }}
+        run: npx -y @restatedev/restate deployment register -y ${{ env.TAGGED_URL }}
