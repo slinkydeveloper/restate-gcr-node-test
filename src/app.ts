@@ -31,6 +31,5 @@ const greeter = restate.service({
 });
 
 restate.serve({
-  services: [greeter],
-  port: 9080,
+  services: [greeter]
 });
