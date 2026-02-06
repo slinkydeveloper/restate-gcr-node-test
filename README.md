@@ -15,7 +15,6 @@ The workflow lives at `.github/workflows/release-cloudrun.yml` and follows Googl
 1. Enable required APIs for your project:
    - Artifact Registry API
    - Cloud Run Admin API
-   - Cloud Build API (only if you switch to Cloud Build; current workflow builds with Docker)
 2. Create an Artifact Registry repository for Docker images:
    - Format: `Docker`
    - Location (region): e.g. `us`, `europe`, or `asia` (this is `GAR_LOCATION`)

@@ -12,6 +12,19 @@ spec:
   config: |
     auto-provision = false
   security:
+    serviceAnnotations:
+      cloud.google.com/backend-config: '{"ports": {"ingress": "restate-ingress-backend", "admin": "restate-admin-backend"}}'
+    networkPeers:
+      ingress:
+        - ipBlock:
+            cidr: 35.191.0.0/16  # GCP health check probers
+        - ipBlock:
+            cidr: 130.211.0.0/22  # GCP health check probers
+      admin:
+        - ipBlock:
+            cidr: 35.191.0.0/16
+        - ipBlock:
+            cidr: 130.211.0.0/22
     networkEgressRules:
       - ports:
           - port: 53
@@ -21,3 +34,62 @@ spec:
         to:
           - ipBlock:
               cidr: 169.254.20.10/32
+
+---
+
+# BackendConfig for custom health checks (GKE-specific)
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: restate-ingress-backend
+  namespace: restate-test
+spec:
+  healthCheck:
+    type: HTTP
+    requestPath: /restate/health
+    port: 8080
+---
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: restate-admin-backend
+  namespace: restate-test
+spec:
+  healthCheck:
+    type: HTTP
+    requestPath: /health
+    port: 9070
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: restate-ingress
+  namespace: restate-test
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /*
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: restate
+                port:
+                  number: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: restate-admin-ingress
+  namespace: restate-test
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /*
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: restate
+                port:
+                  number: 9070
