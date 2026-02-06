@@ -136,9 +136,7 @@ gcloud iam workload-identity-pools providers describe "my-repo" \
   --format="value(name)"
 ```
 
-### 📦 On Restate Cloud
-
-Now you're ready to set up the GitHub Actions variables:
+Now you're ready to set up the GitHub Actions variables to deploy on GCR:
 
 **GitHub Variables** (Settings → Secrets and variables → Actions → Variables):
 - `GCP_PROJECT_ID` — Your GCP project ID
@@ -148,6 +146,10 @@ Now you're ready to set up the GitHub Actions variables:
 - `WIF_PROVIDER` — Output from the last gcloud command above (e.g. `projects/123456789/locations/global/workloadIdentityPools/github/providers/my-repo`)
 - `WIF_SERVICE_ACCOUNT` — The full name of the service account created above, (e.g. `github-deployer@${PROJECT_ID}.iam.gserviceaccount.com`)
 
+### 📦 On Restate Cloud
+
+If you want to use your services with Restate cloud, set the following secrets:
+
 **GitHub Secrets** (Settings → Secrets and variables → Actions → Secrets):
 - `RESTATE_ADMIN_URL`: The Admin URL. You can find it in [Developers > Admin URL](https://cloud.restate.dev/to/developers/integration#admin)
 - `RESTATE_AUTH_TOKEN`: Your Restate Cloud auth token. To get one, go to [Developers > API Keys > Create API Key](https://cloud.restate.dev?createApiKey=true&createApiKeyDescription=deployment-key&createApiKeyRole=rst:role::AdminAccess), and make sure to select **Admin** for role
@@ -156,7 +158,7 @@ Once the repo is set up, **just push to the main branch**. The workflow will bui
 
 ### 🔧 Manual Deployment
 
-You can also deploy manually by following the [Restate + Cloud Run documentation](https://docs.restate.dev/category/cloud-run).
+Alternatively, you can setup the Restate cluster of your choice, just setup `RESTATE_ADMIN_URL` as above described.
 
 ## 🎯 Next Steps
 
