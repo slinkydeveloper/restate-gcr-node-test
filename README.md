@@ -1,92 +1,168 @@
-# Hello world - TypeScript example
+# 🚀 Restate + Cloud Run Template
 
-Sample project configuration of a Restate service using the TypeScript SDK.
+Welcome to the **Restate TypeScript + Cloud Run** template! ✨
 
-Have a look at the [TypeScript Quickstart guide](https://docs.restate.dev/get_started/quickstart?sdk=ts) for more information on how to use this template.
+## 🛠️ Local Development
 
-## Continuous deployment to Google Cloud Run
+Install dependencies:
+```bash
+npm install
+```
 
-This repo is configured to automatically build a Docker image and deploy it to Google Cloud Run on every push to `main`. After a successful deployment, the workflow optionally registers the service with your Restate control plane.
+Launch the local Restate server:
+```bash
+npx @restatedev/restate-server
+```
 
-The workflow lives at `.github/workflows/release-cloudrun.yml` and follows Google’s example: https://github.com/google-github-actions/example-workflows/blob/main/workflows/deploy-cloudrun/cloudrun-docker.yml
+Start the service locally:
+```bash
+npm run dev
+```
 
-### Prerequisites in Google Cloud
+Connect your local service to Restate:
+```bash
+npx @restatedev/restate dep register http://localhost:9080
+```
 
-1. Enable required APIs for your project:
-   - Artifact Registry API
-   - Cloud Run Admin API
-2. Create an Artifact Registry repository for Docker images:
-   - Format: `Docker`
-   - Location (region): e.g. `us`, `europe`, or `asia` (this is `GAR_LOCATION`)
-   - Repository ID: e.g. `restate-services` (this is `GAR_REPOSITORY`)
-3. Create a Service Account used by GitHub Actions and grant roles:
-   - `roles/run.admin` (Cloud Run Admin)
-   - `roles/iam.serviceAccountUser` (Service Account User)
-   - `roles/artifactregistry.writer` (Artifact Registry Writer)
-   - Optionally `roles/viewer` for basic read operations during deploy.
+Iterate! 🔧
 
-### Authentication from GitHub Actions to Google Cloud
+## 🚀 Deploy
 
-You can use either Workload Identity Federation (recommended) or a JSON key. Configure one of the two options below.
+This repository contains a GitHub action that on each push to main:
 
-Option A — Workload Identity Federation (recommended):
-- Create a Workload Identity Pool and a Provider that trusts your GitHub org/repo.
-- Bind the Service Account to the pool with `roles/iam.workloadIdentityUser`.
-- Save the following GitHub repository secrets:
-  - `WIF_PROVIDER`: The full resource name of the provider, e.g. `projects/123456789/locations/global/workloadIdentityPools/gh-pool/providers/gh-provider`.
-  - `WIF_SERVICE_ACCOUNT`: The service account email, e.g. `github-deployer@<PROJECT_ID>.iam.gserviceaccount.com`.
+1. Builds the container with your application
+2. Pushes the container to Google Artifact Registry
+3. Deploys to Google Cloud Run a new revision
+4. Registers the new revision to Restate
 
-Option B — Service Account key (simpler, less secure):
-- Create a key for the service account and download the JSON.
-- Save the JSON as the `GCP_SA_KEY` GitHub secret.
+### 🔧 Google Cloud Run Setup
 
-Reference: https://github.com/google-github-actions/deploy-cloudrun?tab=readme-ov-file#authorization
+Enable Artifact registry and Google Cloud Run:
 
-### Required GitHub Secrets
+```bash
+export PROJECT_ID=<GOOGLE_CLOUD_PROJECT_ID>
 
-Populate these repository secrets so the workflow can build and deploy:
+gcloud services enable artifactregistry.googleapis.com run.googleapis.com iam.googleapis.com --project="${PROJECT_ID}"
+```
 
-- `GCP_PROJECT_ID` — Your Google Cloud project ID.
-- `GCP_REGION` — Cloud Run region, e.g. `us-central1`.
-- `GAR_LOCATION` — Artifact Registry location scope, e.g. `us`, `europe`, `asia`.
-- `GAR_REPOSITORY` — Artifact Registry repository name, e.g. `restate-services`.
-- `CLOUD_RUN_SERVICE` — The Cloud Run service name to create/update, e.g. `ts-hello-world`.
-- One of the auth options:
-  - `WIF_PROVIDER` and `WIF_SERVICE_ACCOUNT`, or
-  - `GCP_SA_KEY`
+Create an Artifact Registry Docker repository:
 
-Optional (for Restate registration after deploy):
-- `RESTATE_URL` — Base URL of your Restate control plane (e.g. `https://my-restate.example.com`).
-- `RESTATE_TOKEN` — Bearer token to call the Restate Admin API.
-- `RESTATE_SERVICE_SECRET` — Optional secret shared with the service for verification.
+```bash
+export GAR_REPOSITORY=<CONTAINER_REGISTRY_NAME_TO_CREATE>
+export GCP_REGION=<GOOGLE_CLOUD_REGION>
 
-### What the workflow does
+gcloud artifacts repositories create "${GAR_REPOSITORY}" \
+  --project="${PROJECT_ID}" \
+  --repository-format=docker \
+  --location="${GCP_REGION}"
+```
 
-- Checks out the code.
-- Authenticates to Google Cloud (WIF if configured, otherwise SA key).
-- Configures Docker to push to Artifact Registry.
-- Builds the image from the provided `Dockerfile` and pushes it to `LOCATION-docker.pkg.dev/PROJECT/REPOSITORY/SERVICE:SHA`.
-- Deploys the image to Cloud Run (public by default via `allow_unauthenticated: true`).
-- If `RESTATE_URL` and `RESTATE_TOKEN` are provided, calls the Restate Admin API to register the deployed service URL. You can adapt the payload to your control-plane version; see the Vercel example flow for reference: https://docs.restate.dev/services/deploy/vercel
+Create a Service Account for GitHub Actions:
 
-### Dockerfile
+```bash
+gcloud iam service-accounts create "github-deployer" \
+  --project="${PROJECT_ID}" \
+  --display-name="GitHub Actions Deployer"
+```
 
-A production-ready multi-step `Dockerfile` is included and works on Cloud Run. It:
-- Installs dependencies and builds the TypeScript app
-- Prunes dev dependencies
-- Runs the app with `dumb-init` on port `9080`
+Grant the required roles to the Service Account:
 
-If you need a different port, update both the `Dockerfile` `EXPOSE` and your service code, and optionally set a Cloud Run env var `PORT` if your framework relies on it.
+```bash
+# Cloud run admin to create/update services
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+  --member="serviceAccount:github-deployer@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/run.admin"
 
-### First-time deployment tips
+# Service account user
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+  --member="serviceAccount:github-deployer@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/iam.serviceAccountUser"
 
-- Ensure the Artifact Registry repository exists in the `GAR_LOCATION` region you configured.
-- The first deploy will create the Cloud Run service if it doesn't exist.
-- If you require private Cloud Run (no unauthenticated access), set `allow_unauthenticated: false` in the workflow and configure IAM accordingly.
-- Verify the deployed URL printed by the workflow logs.
+# Writer to container registry
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+  --member="serviceAccount:github-deployer@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/artifactregistry.writer"
+```
 
-### Local development
+Create a Workload Identity Pool:
 
-- `npm install`
-- `npm run build`
-- `npm start` (or run the compiled `dist/app.js`)
+```bash
+gcloud iam workload-identity-pools create "github" \
+  --project="${PROJECT_ID}" \
+  --location="global" \
+  --display-name="GitHub Actions Pool"
+```
+
+Get the ID of the Workload Identity Pool:
+
+```bash
+WORKLOAD_IDENTITY_POOL_ID=$(gcloud iam workload-identity-pools describe "github" \
+  --project="${PROJECT_ID}" \
+  --location="global" \
+  --format="value(name)")
+```
+
+Create a Workload Identity Provider with an attribute condition:
+
+```bash
+export GITHUB_ORG=<YOUR_GITHUB_ORG_OR_USERNAME> # e.g. restatedev
+
+gcloud iam workload-identity-pools providers create-oidc "my-repo" \
+  --project="${PROJECT_ID}" \
+  --location="global" \
+  --workload-identity-pool="github" \
+  --display-name="My GitHub repo Provider" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository,attribute.repository_owner=assertion.repository_owner" \
+  --attribute-condition="assertion.repository_owner == '${GITHUB_ORG}'" \
+  --issuer-uri="https://token.actions.githubusercontent.com"
+```
+
+Allow authentications from the Workload Identity Pool to your Service Account:
+```bash
+export GITHUB_REPO=<FULLY_QUALIFIED_GITHUB_REPO_NAME> # e.g. your-org/your-repo
+
+gcloud iam service-accounts add-iam-policy-binding "github-deployer@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --project="${PROJECT_ID}" \
+  --role="roles/iam.workloadIdentityUser" \
+  --member="principalSet://iam.googleapis.com/${WORKLOAD_IDENTITY_POOL_ID}/attribute.repository/${GITHUB_REPO}"
+```
+
+Extract the Workload Identity Provider resource name (use this as `WIF_PROVIDER`):
+```bash
+gcloud iam workload-identity-pools providers describe "my-repo" \
+  --project="${PROJECT_ID}" \
+  --location="global" \
+  --workload-identity-pool="github" \
+  --format="value(name)"
+```
+
+### 📦 On Restate Cloud
+
+Now you're ready to set up the GitHub Actions variables:
+
+**GitHub Variables** (Settings → Secrets and variables → Actions → Variables):
+- `GCP_PROJECT_ID` — Your GCP project ID
+- `GCP_REGION` — Region for Cloud Run and Artifact Registry (e.g. `us-central1`)
+- `GAR_REPOSITORY` — Artifact Registry repository name (from setup above)
+- `CLOUD_RUN_SERVICE` — Cloud Run service name (e.g. `my-service`)
+- `WIF_PROVIDER` — Output from the last gcloud command above (e.g. `projects/123456789/locations/global/workloadIdentityPools/github/providers/my-repo`)
+- `WIF_SERVICE_ACCOUNT` — The full name of the service account created above, (e.g. `github-deployer@${PROJECT_ID}.iam.gserviceaccount.com`)
+
+**GitHub Secrets** (Settings → Secrets and variables → Actions → Secrets):
+- `RESTATE_ADMIN_URL`: The Admin URL. You can find it in [Developers > Admin URL](https://cloud.restate.dev/to/developers/integration#admin)
+- `RESTATE_AUTH_TOKEN`: Your Restate Cloud auth token. To get one, go to [Developers > API Keys > Create API Key](https://cloud.restate.dev?createApiKey=true&createApiKeyDescription=deployment-key&createApiKeyRole=rst:role::AdminAccess), and make sure to select **Admin** for role
+
+Once the repo is set up, **just push to the main branch**. The workflow will build, deploy to Cloud Run with a tagged revision URL (e.g. `https://rev-abc1234---myservice-xyz.run.app`), and automatically register the deployment to Restate.
+
+### 🔧 Manual Deployment
+
+You can also deploy manually by following the [Restate + Cloud Run documentation](https://docs.restate.dev/category/cloud-run).
+
+## 🎯 Next Steps
+
+- 🔐 Secure your endpoint as shown in your [Restate Cloud Dashboard > Developers > Security](https://cloud.restate.dev/to/developers/integration#security)
+- 📖 Explore the [Restate documentation](https://docs.restate.dev)
+- 🔍 Check out more [examples and tutorials](https://github.com/restatedev/examples)
+- 💬 Join the [Restate Discord community](https://discord.gg/skW3AZ6uGd)
+
+Happy building! 🎉
