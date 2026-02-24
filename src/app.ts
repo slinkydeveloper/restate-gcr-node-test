@@ -1,35 +1,70 @@
 import * as restate from "@restatedev/restate-sdk";
-import { sendNotification, sendReminder } from "./utils";
 
-import { z } from "zod";
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
-const Greeting = z.object({
-  name: z.string(),
+export interface SetStateRequest {
+    stack_id: string;
+    step_id: number;
+    value: unknown;
+}
+
+export interface GetStateRequest {
+    stack_id: string;
+    step_id: number;
+}
+
+// ---------------------------------------------------------------------------
+// DossDataStore: state management virtual object
+// ---------------------------------------------------------------------------
+
+function resultKey(stackId: string, stepId: number): string {
+    return `${stackId}/${stepId}/result`;
+}
+
+export const dossDataStore = restate.object({
+    name: "DossDataStore",
+    handlers: {
+        /**
+         * Clears all state for this object key.
+         */
+        cleanup: restate.createObjectHandler({ enableLazyState: true }, async (ctx: restate.ObjectContext) => {
+            ctx.clearAll();
+        }),
+
+        /**
+         * Reads a previously stored value from state.
+         * Shared handler — can run concurrently with other shared handlers.
+         */
+        get_state: restate.createObjectSharedHandler({ enableLazyState: true },
+            async (
+                ctx: restate.ObjectSharedContext,
+                request: GetStateRequest
+            ): Promise<unknown> => {
+                const key = resultKey(request.stack_id, request.step_id);
+                const value = await ctx.get<unknown>(key);
+                return value ?? null;
+            }
+        ),
+
+        /**
+         * Writes a value into state.
+         */
+        set_state: restate.createObjectHandler({ enableLazyState: true }, async (
+            ctx: restate.ObjectContext,
+            request: SetStateRequest
+        ) => {
+            const key = resultKey(request.stack_id, request.step_id);
+            ctx.set(key, request.value);
+            await ctx.run("flush", () => {});
+        }),
+    },
 });
 
-const GreetingResponse = z.object({
-  result: z.string(),
-});
+export type DossDataStore = typeof dossDataStore;
 
-const greeter = restate.service({
-  name: "Greeter",
-  handlers: {
-    greet: restate.createServiceHandler(
-      { input: restate.serde.schema(Greeting), output: restate.serde.schema(GreetingResponse) },
-      async (ctx: restate.Context, { name }) => {
-        // Durably execute a set of steps; resilient against failures
-        const greetingId = ctx.rand.uuidv4();
-        await ctx.run("Notification", () => sendNotification(greetingId, name));
-        await ctx.sleep({ seconds: 1 });
-        await ctx.run("Reminder", () => sendReminder(greetingId, name));
-
-        // Respond to caller
-        return { result: `You said hi to ${name}!` };
-      },
-    ),
-  },
-});
 
 restate.serve({
-  services: [greeter]
+  services: [dossDataStore]
 });
