@@ -57,7 +57,7 @@ export const dossDataStore = restate.object({
         ) => {
             const key = resultKey(request.stack_id, request.step_id);
             ctx.set(key, request.value);
-            await ctx.run("flush", () => {});
+            // await ctx.run("flush", () => {});
         }),
     },
 });
