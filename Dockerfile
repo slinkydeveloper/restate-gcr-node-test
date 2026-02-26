@@ -7,7 +7,7 @@ WORKDIR /usr/src/app
 
 # copy package.json and package-lock.json separately to cache dependencies
 COPY package*.json .
-COPY restatedev-restate-sdk-1.10.3.tgz .
+COPY restatedev-restate-sdk-1.10.4.tgz .
 RUN npm install
 
 COPY --chown=node:node . .
